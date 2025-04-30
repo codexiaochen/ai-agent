@@ -1,20 +1,24 @@
 package com.chen.aiagent.controller;
 
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Flux;
 
-import java.util.List;
+
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
 @RestController
 @RequestMapping("/chat")
+@Slf4j
 public class ollamaController {
 
     @Resource
@@ -24,7 +28,11 @@ public class ollamaController {
     private final ChatClient chatClient;
 
     public ollamaController(ChatClient.Builder builder) {
-        this.chatClient = builder.defaultSystem("你是一个{java}编程高手").build();
+        this.chatClient = builder
+                .defaultSystem("你是一个{java}编程高手")
+                .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory())
+                )
+                .build();
     }
     //第二种
 //    ChatClient chatClient = ChatClient.builder(deepseekR1ChatModel)
@@ -98,4 +106,31 @@ public class ollamaController {
                 .content();
         return result;
     }
+
+    @PostMapping("/chatModel/test")
+    public String getMessage3(String message) {
+//        chatClient.prompt().advisors(MessageChatMemoryAdvisor.builder(new InMemoryChatMemory());
+        return "";
+    }
+
+    /**
+     * AI 基础对话（支持多轮对话记忆）
+     * @param message
+     * @param chatId
+     * @return
+     */
+    @PostMapping("/chatModel/adnisor")
+    public String doChat(String message, String chatId) {
+        ChatResponse chatResponse = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                .call()
+                .chatResponse();
+        String content = chatResponse.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
+    }
+
 }
