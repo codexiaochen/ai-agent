@@ -2,12 +2,18 @@ package com.chen.aiagent.myApp;
 
 import com.chen.aiagent.advisor.MyLoggerAdvisor;
 import com.chen.aiagent.utils.FileBasedChatMemory;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.PostMapping;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -52,7 +58,28 @@ public class LoveApp {
 
 
     /**
-     * AI 恋爱报告功能（实战结构化输出）
+     * AI 基础对话（支持多轮对话记忆）
+     * @param message
+     * @param chatId
+     * @return
+     */
+    @PostMapping("/chatModel/adnisor")
+    public Flux<String> doChat(String message, String chatId) {
+        Flux<String> content = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                .stream()
+                .content();
+
+        log.info("content: {}", content);
+        return content;
+    }
+
+
+    /**
+     * AI 恋爱报告功能（实战结构化输出）  本地部署模型能力太小，无法正常工作，使用大模型调用再使用
      * @param message
      * @param chatId
      * @return
@@ -69,4 +96,25 @@ public class LoveApp {
         log.info("loveReport: {}", loveReport);
         return loveReport;
     }
+
+    @Resource
+    private VectorStore loveAppVectorStore;
+
+    public String doChatWithRag(String message, String chatId) {
+        ChatResponse chatResponse = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                // 开启日志，便于观察效果
+                .advisors(new MyLoggerAdvisor())
+                // 应用知识库问答
+                .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
+                .call()
+                .chatResponse();
+        String content = chatResponse.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
+    }
+
 }
