@@ -1,17 +1,18 @@
 package com.chen.aiagent.controller;
 
+import com.chen.aiagent.advisor.MyLoggerAdvisor;
+import com.chen.aiagent.utils.FileBasedChatMemory;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import reactor.core.publisher.Flux;
 
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
@@ -29,8 +30,10 @@ public class ollamaController {
 
     public ollamaController(ChatClient.Builder builder) {
         this.chatClient = builder
-                .defaultSystem("你是一个{java}编程高手")
-                .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory())
+                .defaultSystem("你是一个{java}高手")
+                .defaultAdvisors(
+                        new MessageChatMemoryAdvisor(new FileBasedChatMemory("D:\\demo\\memory")),
+                        new MyLoggerAdvisor()
                 )
                 .build();
     }
@@ -120,16 +123,16 @@ public class ollamaController {
      * @return
      */
     @PostMapping("/chatModel/adnisor")
-    public String doChat(String message, String chatId) {
-        ChatResponse chatResponse = chatClient
+    public Flux<String> doChat(String message, String chatId) {
+        Flux<String> content = chatClient
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
-                .call()
-                .chatResponse();
-        String content = chatResponse.getResult().getOutput().getText();
-        log.info("content: {}", content);
+                .stream()
+                .content();
+
+//        log.info("content: {}", content);
         return content;
     }
 
